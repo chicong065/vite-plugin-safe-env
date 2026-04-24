@@ -1,6 +1,17 @@
-# vite-plugin-safe-env
-
-A Vite plugin that prevents server-only environment variables from leaking into client-side bundles.
+<p align="center">
+   <a href="https://vite.dev" target="_blank" rel="noopener noreferrer">
+      <picture >
+         <source media="(prefers-color-scheme: dark)" srcset="https://vite.dev/vite-light.svg">
+         <source media="(prefers-color-scheme: light)" srcset="https://vite.dev/vite-dark.svg">
+         <img alt="vite logo" src="https://vite.dev/vite-dark.svg" height="60">
+      </picture>
+   </a>
+</p>
+<h2 align="center">vite-plugin-safe-env</h2>
+<h4 align="center">
+   A Vite plugin that prevents server-only environment variables from leaking into client-side bundles.
+</h4>
+<br/>
 
 Vite ensures only `VITE_`-prefixed variables are exposed through `import.meta.env`, but offers no such protection for `process.env`. A server-side module accidentally imported into the client entry tree can silently inline credentials like `DATABASE_URL` or `JWT_SECRET` into the production bundle, readable by anyone who downloads the JavaScript file.
 
@@ -145,14 +156,6 @@ Reports all violations to the terminal without blocking the build. Useful when a
 safeEnv({ blockOn: 'never' })
 ```
 
-## Compatibility
-
-| Vite    | Node.js |
-| ------- | ------- |
-| 4, 5, 6 | 18+     |
-
-Works with React, Vue, Svelte, Solid, and vanilla Vite projects.
-
 ## License
 
-`vite-plugin-safe-env` is open-source software licensed under the [MIT License](./LICENSE).
+[MIT License](./LICENSE) © 2026-present [Cong Nguyen](https://github.com/chicong065)

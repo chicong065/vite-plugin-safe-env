@@ -23,6 +23,8 @@ import type { SafeEnvOptions, ResolvedSafeEnvOptions, BlockOnMode, Violation } f
 import { createDebouncedAnalysisScheduler } from '#worker'
 import type { DebouncedAnalysisScheduler } from '#worker'
 
+export type { SafeEnvOptions, BlockOnMode } from '#types'
+
 const DEFAULT_INCLUDE = ['**/*.{ts,tsx,js,jsx,vue,svelte}']
 const DEFAULT_EXCLUDE = ['node_modules/**', 'dist/**']
 const DEV_ANALYSIS_QUIET_PERIOD_MS = 150
@@ -127,7 +129,7 @@ function reportClientReachableViolations(
  * Phase 2 uses `generateBundle` to scan compiled output chunks for literal env var
  * values, with sourcemap resolution for precise attribution.
  *
- * @param userOptions - Optional configuration. All fields default to safe, non-intrusive values.
+ * @param userOptions - Optional {@link SafeEnvOptions}. All fields default to safe, non-intrusive values.
  * @returns A Vite plugin object ready to be added to the `plugins` array.
  *
  * @example
