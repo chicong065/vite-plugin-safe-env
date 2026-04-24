@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "isolatedDeclarations": true,
+    "verbatimModuleSyntax": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "types": ["node"],
+    "paths": {
+      "#plugin": ["./src/index.ts"],
+      "#env-classification": ["./src/env-classification.ts"],
+      "#scanner": ["./src/scanner.ts"],
+      "#registry": ["./src/registry.ts"],
+      "#graph": ["./src/graph.ts"],
+      "#bundle-scan": ["./src/bundle-scan.ts"],
+      "#reporter": ["./src/reporter.ts"],
+      "#worker": ["./src/worker.ts"],
+      "#types": ["./src/types.ts"]
+    }
+  },
+  "include": ["src"],
+  "exclude": ["dist", "node_modules", "playground", "tests"]
+}
