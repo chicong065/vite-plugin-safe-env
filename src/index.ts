@@ -3,8 +3,8 @@ import type { Plugin, ResolvedConfig } from 'vite'
 import { createFilter } from 'vite'
 
 import { scanOutputChunk, collectServerEnvVarValues } from '#bundle-scan'
-import { collectClientReachableModuleIds, buildImportChainToModule } from '#graph'
-import type { GetImportedModuleIds } from '#graph'
+import { collectClientReachableModuleIds, buildImportChainToModule, buildImportChainViaImporters } from '#graph'
+import type { GetImportedModuleIds, GetImporterModuleIds } from '#graph'
 import {
   registerTaintedModule,
   clearTaintedModule,
@@ -19,7 +19,7 @@ import {
   formatViolationForOverlay,
 } from '#reporter'
 import { scanModuleSource } from '#scanner'
-import type { SafeEnvOptions, ResolvedSafeEnvOptions, BlockOnMode, Violation } from '#types'
+import type { SafeEnvOptions, ResolvedSafeEnvOptions, BlockOnMode, TaintedModule, Violation } from '#types'
 import { createDebouncedAnalysisScheduler } from '#worker'
 import type { DebouncedAnalysisScheduler } from '#worker'
 
@@ -84,9 +84,35 @@ function resolveClientEntryModuleIds(resolvedViteConfig: ResolvedConfig): string
 }
 
 /**
- * Walks every tainted module reachable from the client entry points, constructs
- * a `Violation` for each env-var access, and passes it to `onViolation`.
- * The import chain is computed once per tainted module, not once per access.
+ * Constructs a `Violation` for every env-var access inside the given tainted
+ * module and forwards each one to `onViolation`. Shared by the dev-mode and
+ * build-mode paths so that the `Violation` shape is defined in exactly one place.
+ *
+ * @param taintedModule - The module whose accesses will be emitted as violations.
+ * @param importChain - The pre-computed client entry to module import chain.
+ * @param onViolation - Called once for each constructed `Violation`.
+ */
+function emitViolationsForTaintedModule(
+  taintedModule: TaintedModule,
+  importChain: string[],
+  onViolation: (violation: Violation) => void
+): void {
+  for (const envAccess of taintedModule.accesses) {
+    onViolation({
+      moduleId: taintedModule.moduleId,
+      envVarName: envAccess.envVarName,
+      line: envAccess.line,
+      column: envAccess.column,
+      importChain,
+      suggestedFix: buildSuggestedFix(envAccess.envVarName, importChain),
+    })
+  }
+}
+
+/**
+ * Walks every tainted module reachable from the client entry points and emits
+ * a `Violation` for each env-var access via `onViolation`. The import chain is
+ * computed once per tainted module, not once per access.
  *
  * @param clientEntryModuleIds - Entry points used as BFS roots.
  * @param graphAdapter - Returns the direct imported module IDs for a given module.
@@ -105,17 +131,7 @@ function reportClientReachableViolations(
     }
 
     const importChain = buildImportChainToModule(taintedModule.moduleId, clientEntryModuleIds, graphAdapter)
-
-    for (const envAccess of taintedModule.accesses) {
-      onViolation({
-        moduleId: taintedModule.moduleId,
-        envVarName: envAccess.envVarName,
-        line: envAccess.line,
-        column: envAccess.column,
-        importChain,
-        suggestedFix: buildSuggestedFix(envAccess.envVarName, importChain),
-      })
-    }
+    emitViolationsForTaintedModule(taintedModule, importChain, onViolation)
   }
 }
 
@@ -168,38 +184,47 @@ export default function safeEnv(userOptions?: SafeEnvOptions): Plugin {
 
       if (envAccesses.length > 0) {
         registerTaintedModule({ moduleId, accesses: envAccesses })
+        devAnalysisScheduler?.schedule()
       }
 
       return null
     },
 
     configureServer(server) {
+      // The dev-mode analysis traverses `importers` upward from each tainted module
+      // rather than `importedModules` downward from the HTML entry, because Vite's
+      // dev `moduleGraph` does not populate imports on the HTML node. Any module
+      // present in the dev graph is client-reachable by construction: the browser
+      // requested it.
+      const devImporterAdapter: GetImporterModuleIds = (moduleId) => {
+        const importerIds: string[] = []
+        const moduleNode = server.moduleGraph.getModuleById(moduleId)
+        for (const importerNode of moduleNode?.importers ?? []) {
+          if (importerNode.id) {
+            importerIds.push(importerNode.id)
+          }
+        }
+        return importerIds
+      }
+
       devAnalysisScheduler = createDebouncedAnalysisScheduler(async () => {
         if (!hasTaintedModules()) {
           return
         }
 
-        const clientEntryModuleIds = resolveClientEntryModuleIds(resolvedViteConfig)
-
-        const devGraphAdapter: GetImportedModuleIds = (moduleId) => {
-          const moduleNode = server.moduleGraph.getModuleById(moduleId)
-          if (!moduleNode) {
-            return []
+        for (const taintedModule of getAllTaintedModules()) {
+          if (!server.moduleGraph.getModuleById(taintedModule.moduleId)) {
+            continue
           }
-          const importedIds: string[] = []
-          for (const importedNode of moduleNode.importedModules) {
-            if (importedNode.id) {
-              importedIds.push(importedNode.id)
+
+          const importChain = buildImportChainViaImporters(taintedModule.moduleId, devImporterAdapter)
+
+          emitViolationsForTaintedModule(taintedModule, importChain, (violation) => {
+            if (resolvedOptions.overlay) {
+              server.ws.send(formatViolationForOverlay(violation))
             }
-          }
-          return importedIds
+          })
         }
-
-        reportClientReachableViolations(clientEntryModuleIds, devGraphAdapter, (violation) => {
-          if (resolvedOptions.overlay) {
-            server.ws.send(formatViolationForOverlay(violation))
-          }
-        })
       }, DEV_ANALYSIS_QUIET_PERIOD_MS)
     },
 

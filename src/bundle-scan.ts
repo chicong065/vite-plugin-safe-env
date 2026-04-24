@@ -6,6 +6,8 @@ import type { BundleLeak } from '#types'
 
 const MINIMUM_SECRET_LENGTH = 4
 
+const UNRESOLVED_LEAK_ORIGIN = { originalFile: 'unknown', originalLine: 0, originalColumn: 0 } as const
+
 /**
  * Options accepted by {@link scanOutputChunk} for scanning a single compiled
  * output chunk for leaked server-only environment variable values.
@@ -72,10 +74,7 @@ export function collectServerEnvVarValues(allowClientAccess: string[]): Map<stri
   const allowSet = new Set(allowClientAccess)
 
   for (const [envVarName, envVarValue] of Object.entries(process.env)) {
-    if (isClientPermittedEnvVar(envVarName, allowSet)) {
-      continue
-    }
-    if (envVarValue === undefined) {
+    if (envVarValue === undefined || isClientPermittedEnvVar(envVarName, allowSet)) {
       continue
     }
 
@@ -116,7 +115,7 @@ function resolveLeakOrigin(
   traceMap: TraceMap | null
 ): { originalFile: string; originalLine: number; originalColumn: number } {
   if (!traceMap) {
-    return { originalFile: 'unknown', originalLine: 0, originalColumn: 0 }
+    return UNRESOLVED_LEAK_ORIGIN
   }
 
   const precedingText = chunkCode.slice(0, matchCharacterOffset)
@@ -134,6 +133,6 @@ function resolveLeakOrigin(
       originalColumn: resolvedPosition.column ?? 0,
     }
   } catch {
-    return { originalFile: 'unknown', originalLine: 0, originalColumn: 0 }
+    return UNRESOLVED_LEAK_ORIGIN
   }
 }

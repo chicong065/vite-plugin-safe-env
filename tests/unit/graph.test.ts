@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { collectClientReachableModuleIds, buildImportChainToModule } from '#graph'
+import { collectClientReachableModuleIds, buildImportChainToModule, buildImportChainViaImporters } from '#graph'
 
 const moduleImportFixture: Record<string, string[]> = {
   '/src/main.tsx': ['/src/components/UserCard.tsx', '/src/utils/clean.ts'],
@@ -100,5 +100,70 @@ describe('buildImportChainToModule', () => {
     expect(result).toHaveLength(3)
     expect(result[0]).toBe('/src/entry.ts')
     expect(result[result.length - 1]).toBe('/src/target.ts')
+  })
+})
+
+describe('buildImportChainViaImporters', () => {
+  const importerFixture: Record<string, string[]> = {
+    '/src/utils/db.ts': ['/src/components/UserCard.tsx'],
+    '/src/components/UserCard.tsx': ['/src/main.tsx'],
+    '/src/main.tsx': [],
+  }
+
+  const getImporterModuleIds = (moduleId: string): string[] => importerFixture[moduleId] ?? []
+
+  it('returns the full chain from the root down to the target', () => {
+    const result = buildImportChainViaImporters('/src/utils/db.ts', getImporterModuleIds)
+
+    expect(result).toEqual(['/src/main.tsx', '/src/components/UserCard.tsx', '/src/utils/db.ts'])
+  })
+
+  it('returns a chain of length two when the target has exactly one importer that is itself a root', () => {
+    const result = buildImportChainViaImporters('/src/components/UserCard.tsx', getImporterModuleIds)
+
+    expect(result).toEqual(['/src/main.tsx', '/src/components/UserCard.tsx'])
+  })
+
+  it('returns a single-element array when the target has no importers (is itself a root)', () => {
+    const result = buildImportChainViaImporters('/src/main.tsx', getImporterModuleIds)
+
+    expect(result).toEqual(['/src/main.tsx'])
+  })
+
+  it('returns a single-element array as a fallback when no root is reachable (cycle)', () => {
+    const cyclicImporterMap: Record<string, string[]> = {
+      '/src/moduleA.ts': ['/src/moduleB.ts'],
+      '/src/moduleB.ts': ['/src/moduleA.ts'],
+    }
+
+    const result = buildImportChainViaImporters(
+      '/src/moduleA.ts',
+      (moduleId) => cyclicImporterMap[moduleId] ?? []
+    )
+
+    expect(result).toEqual(['/src/moduleA.ts'])
+  })
+
+  it('returns the shortest chain when the target has multiple importer routes', () => {
+    const diamondImporterMap: Record<string, string[]> = {
+      '/src/target.ts': ['/src/branchA.ts', '/src/branchB.ts'],
+      '/src/branchA.ts': ['/src/middle.ts'],
+      '/src/branchB.ts': ['/src/root.ts'],
+      '/src/middle.ts': ['/src/root.ts'],
+      '/src/root.ts': [],
+    }
+
+    const result = buildImportChainViaImporters('/src/target.ts', (moduleId) => diamondImporterMap[moduleId] ?? [])
+
+    expect(result[0]).toBe('/src/root.ts')
+    expect(result[result.length - 1]).toBe('/src/target.ts')
+    expect(result).toHaveLength(3)
+    expect(result).toEqual(['/src/root.ts', '/src/branchB.ts', '/src/target.ts'])
+  })
+
+  it('returns the target alone when the importer adapter returns an empty array for every module', () => {
+    const result = buildImportChainViaImporters('/src/isolated.ts', () => [])
+
+    expect(result).toEqual(['/src/isolated.ts'])
   })
 })

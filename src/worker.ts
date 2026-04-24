@@ -35,7 +35,7 @@ export type DebouncedAnalysisScheduler = AnalysisSchedulerHandle & {
  * @example
  * ```ts
  * const scheduler = createDebouncedAnalysisScheduler(runGraphAnalysis, 150)
- * // Call on every HMR update — only the last one within 150 ms fires
+ * // Call on every HMR update. Only the last one within 150 ms fires.
  * scheduler.schedule()
  * ```
  */
