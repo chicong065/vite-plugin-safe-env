@@ -1,8 +1,9 @@
 import type { SourceMapInput } from '@jridgewell/trace-mapping'
 import type { Plugin, ResolvedConfig } from 'vite'
-import { createFilter } from 'vite'
+import { createFilter, resolveEnvPrefix } from 'vite'
 
 import { scanOutputChunk, collectServerEnvVarValues } from '#bundle-scan'
+import { DEFAULT_ENV_PREFIXES } from '#env-classification'
 import { collectClientReachableModuleIds, buildImportChainToModule, buildImportChainViaImporters } from '#graph'
 import type { GetImportedModuleIds, GetImporterModuleIds } from '#graph'
 import {
@@ -162,6 +163,7 @@ export default function safeEnv(userOptions?: SafeEnvOptions): Plugin {
   const moduleFilter = createFilter(userOptions?.include ?? DEFAULT_INCLUDE, userOptions?.exclude ?? DEFAULT_EXCLUDE)
   const allowClientAccessSet = new Set(resolvedOptions.allowClientAccess)
   let resolvedViteConfig: ResolvedConfig
+  let envPrefixes = DEFAULT_ENV_PREFIXES
   let devAnalysisScheduler: DebouncedAnalysisScheduler | null = null
 
   return {
@@ -172,6 +174,9 @@ export default function safeEnv(userOptions?: SafeEnvOptions): Plugin {
 
     configResolved(config: ResolvedConfig): void {
       resolvedViteConfig = config
+      // Mirror the prefixes Vite itself exposes through `import.meta.env`, so a
+      // custom `envPrefix` is respected instead of assuming the `VITE_` default.
+      envPrefixes = resolveEnvPrefix({ envPrefix: config.envPrefix })
       clearAllTaintedModules()
     },
 
@@ -180,7 +185,7 @@ export default function safeEnv(userOptions?: SafeEnvOptions): Plugin {
         return null
       }
 
-      const envAccesses = scanModuleSource(sourceCode, allowClientAccessSet)
+      const envAccesses = scanModuleSource(sourceCode, allowClientAccessSet, envPrefixes)
 
       if (envAccesses.length > 0) {
         registerTaintedModule({ moduleId, accesses: envAccesses })
@@ -197,14 +202,8 @@ export default function safeEnv(userOptions?: SafeEnvOptions): Plugin {
       // present in the dev graph is client-reachable by construction: the browser
       // requested it.
       const devImporterAdapter: GetImporterModuleIds = (moduleId) => {
-        const importerIds: string[] = []
         const moduleNode = server.moduleGraph.getModuleById(moduleId)
-        for (const importerNode of moduleNode?.importers ?? []) {
-          if (importerNode.id) {
-            importerIds.push(importerNode.id)
-          }
-        }
-        return importerIds
+        return [...(moduleNode?.importers ?? [])].flatMap((importerNode) => (importerNode.id ? [importerNode.id] : []))
       }
 
       devAnalysisScheduler = createDebouncedAnalysisScheduler(async () => {
@@ -263,7 +262,7 @@ export default function safeEnv(userOptions?: SafeEnvOptions): Plugin {
     },
 
     generateBundle(_outputOptions, outputBundle): void {
-      const serverEnvVarValues = collectServerEnvVarValues(resolvedOptions.allowClientAccess)
+      const serverEnvVarValues = collectServerEnvVarValues(resolvedOptions.allowClientAccess, envPrefixes)
       if (serverEnvVarValues.size === 0) {
         return
       }

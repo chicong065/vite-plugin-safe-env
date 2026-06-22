@@ -18,6 +18,6 @@ export default defineConfig(({ mode }) => {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
       },
     },
-    plugins: [safeEnv({ blockOn: 'never' })],
+    plugins: [safeEnv({ blockOn: 'always' })],
   }
 })

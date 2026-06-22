@@ -146,9 +146,6 @@ export function buildImportChainToModule(
   const modulesToVisit: string[] = []
 
   seedWorkQueue(clientEntryModuleIds, visitedModuleIds, modulesToVisit)
-  for (const entryModuleId of clientEntryModuleIds) {
-    parentModuleMap.set(entryModuleId, null)
-  }
 
   while (modulesToVisit.length > 0) {
     const currentModuleId = modulesToVisit.shift()!

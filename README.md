@@ -61,7 +61,7 @@ export default defineConfig({
 
 ### What gets flagged
 
-Any environment variable accessed without the `VITE_` prefix that is reachable from a client entry point:
+Any environment variable accessed without a client-exposed prefix (your `envPrefix` configuration, or `VITE_` by default) that is reachable from a client entry point:
 
 ```ts
 // leaking-usage.ts (imported from a client entry)
@@ -70,10 +70,7 @@ export const dbUrl2 = import.meta.env.DATABASE_URL // also flagged
 export const apiUrl = import.meta.env.VITE_API_URL // safe, has VITE_ prefix
 ```
 
-`import.meta.env.DATABASE_URL` is flagged too, for two reasons:
-
-- **A silent bug:** Vite exposes only `VITE_`-prefixed variables through `import.meta.env`, so this resolves to `undefined` at runtime, leaving the value silently missing with no build-time error.
-- **A config-dependent guarantee:** widening `envPrefix` (for example to `''`) makes Vite inline the real value, turning the access into an actual leak.
+`import.meta.env.DATABASE_URL` is flagged even though Vite resolves it to `undefined`: the access is a silent bug, missing at runtime with no build-time error. To use a variable on the client, give it a prefix Vite exposes (your `envPrefix`, `VITE_` by default) or add it to `allowClientAccess`.
 
 ### Error output
 

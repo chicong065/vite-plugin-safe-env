@@ -96,3 +96,30 @@ describe('scanModuleSource', () => {
     expect(result).toHaveLength(0)
   })
 })
+
+describe('scanModuleSource with a custom envPrefix', () => {
+  it('permits variables carrying the configured prefix', () => {
+    const sourceCode = `const apiUrl = import.meta.env.APP_API_URL`
+
+    const result = scanModuleSource(sourceCode, new Set([]), ['APP_'])
+
+    expect(result).toHaveLength(0)
+  })
+
+  it('flags VITE_ variables when the prefix is no longer the default', () => {
+    const sourceCode = `const apiUrl = import.meta.env.VITE_API_URL`
+
+    const result = scanModuleSource(sourceCode, new Set([]), ['APP_'])
+
+    expect(result).toHaveLength(1)
+    expect(result[0].envVarName).toBe('VITE_API_URL')
+  })
+
+  it('permits variables matching any of several configured prefixes', () => {
+    const sourceCode = [`const a = process.env.APP_ONE`, `const b = process.env.PUBLIC_TWO`].join('\n')
+
+    const result = scanModuleSource(sourceCode, new Set([]), ['APP_', 'PUBLIC_'])
+
+    expect(result).toHaveLength(0)
+  })
+})

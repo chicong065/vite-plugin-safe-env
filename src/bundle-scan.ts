@@ -1,7 +1,7 @@
 import { TraceMap, originalPositionFor } from '@jridgewell/trace-mapping'
 import type { SourceMapInput } from '@jridgewell/trace-mapping'
 
-import { isClientPermittedEnvVar } from '#env-classification'
+import { isClientPermittedEnvVar, DEFAULT_ENV_PREFIXES } from '#env-classification'
 import type { BundleLeak } from '#types'
 
 const MINIMUM_SECRET_LENGTH = 4
@@ -63,18 +63,23 @@ export function scanOutputChunk(options: ScanOutputChunkOptions): BundleLeak[] {
 
 /**
  * Collects the current string values of all environment variables that are
- * considered server-only: those without the `VITE_` prefix and not listed
- * in the explicit allowlist.
+ * considered server-only: those without a configured env prefix (`VITE_` by
+ * default) and not listed in the explicit allowlist.
  *
  * @param allowClientAccess - Variable names explicitly permitted for client use.
+ * @param envPrefixes - Prefixes Vite exposes to the client (resolved `envPrefix`).
+ *   Defaults to {@link DEFAULT_ENV_PREFIXES} (`VITE_`).
  * @returns A Map of environment variable name to its current process value.
  */
-export function collectServerEnvVarValues(allowClientAccess: string[]): Map<string, string> {
+export function collectServerEnvVarValues(
+  allowClientAccess: string[],
+  envPrefixes: readonly string[] = DEFAULT_ENV_PREFIXES
+): Map<string, string> {
   const serverEnvVarValues = new Map<string, string>()
   const allowSet = new Set(allowClientAccess)
 
   for (const [envVarName, envVarValue] of Object.entries(process.env)) {
-    if (envVarValue === undefined || isClientPermittedEnvVar(envVarName, allowSet)) {
+    if (envVarValue === undefined || isClientPermittedEnvVar(envVarName, allowSet, envPrefixes)) {
       continue
     }
 
