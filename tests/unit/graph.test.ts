@@ -136,10 +136,7 @@ describe('buildImportChainViaImporters', () => {
       '/src/moduleB.ts': ['/src/moduleA.ts'],
     }
 
-    const result = buildImportChainViaImporters(
-      '/src/moduleA.ts',
-      (moduleId) => cyclicImporterMap[moduleId] ?? []
-    )
+    const result = buildImportChainViaImporters('/src/moduleA.ts', (moduleId) => cyclicImporterMap[moduleId] ?? [])
 
     expect(result).toEqual(['/src/moduleA.ts'])
   })

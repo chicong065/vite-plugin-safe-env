@@ -13,7 +13,7 @@
 </h4>
 <br/>
 
-Vite ensures only `VITE_`-prefixed variables are exposed through `import.meta.env`, but offers no such protection for `process.env`. A server-side module accidentally imported into the client entry tree can silently inline credentials like `DATABASE_URL` or `JWT_SECRET` into the production bundle, readable by anyone who downloads the JavaScript file.
+Vite ensures only `VITE_`-prefixed variables are exposed through `import.meta.env`, but offers no such protection for `process.env` (exposed by `define: { 'process.env': loadEnv(...) }`). A server-side module accidentally imported into the client entry tree can silently inline credentials like `DATABASE_URL` or `JWT_SECRET` into the production bundle, readable by anyone who downloads the JavaScript file.
 
 `vite-plugin-safe-env` catches this class of bug through two detection phases:
 
@@ -66,8 +66,14 @@ Any environment variable accessed without the `VITE_` prefix that is reachable f
 ```ts
 // leaking-usage.ts (imported from a client entry)
 export const dbUrl = process.env.DATABASE_URL // flagged
+export const dbUrl2 = import.meta.env.DATABASE_URL // also flagged
 export const apiUrl = import.meta.env.VITE_API_URL // safe, has VITE_ prefix
 ```
+
+`import.meta.env.DATABASE_URL` is flagged too, for two reasons:
+
+- **A silent bug:** Vite exposes only `VITE_`-prefixed variables through `import.meta.env`, so this resolves to `undefined` at runtime, leaving the value silently missing with no build-time error.
+- **A config-dependent guarantee:** widening `envPrefix` (for example to `''`) makes Vite inline the real value, turning the access into an actual leak.
 
 ### Error output
 

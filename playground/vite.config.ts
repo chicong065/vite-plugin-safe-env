@@ -1,17 +1,23 @@
-import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
+import safeEnv from 'vite-plugin-safe-env'
 
-import safeEnv from '../dist/index.js'
+export default defineConfig(({ mode }) => {
+  // Load every env var (no prefix filter) and inline it as `process.env`.
+  // This is intentionally leaky so the playground reproduces the bug
+  // that vite-plugin-safe-env is designed to catch.
+  const processEnv = loadEnv(mode, process.cwd(), '')
 
-const playgroundDir = fileURLToPath(new URL('.', import.meta.url))
-
-export default defineConfig({
-  resolve: {
-    alias: {
-      '@': resolve(playgroundDir, 'src'),
+  return {
+    define: {
+      'process.env': JSON.stringify(processEnv),
     },
-  },
-  plugins: [safeEnv({ blockOn: 'always' })],
+    resolve: {
+      alias: {
+        '@': fileURLToPath(new URL('./src', import.meta.url)),
+      },
+    },
+    plugins: [safeEnv({ blockOn: 'never' })],
+  }
 })
